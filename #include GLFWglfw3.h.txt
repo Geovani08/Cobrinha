@@ -1,0 +1,112 @@
+#include <GLFW/glfw3.h>
+#include <glad/glad.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <iostream>
+#include <vector>
+#include <cstdlib>
+#include <ctime>
+
+const unsigned int SCREEN_WIDTH = 800;
+const unsigned int SCREEN_HEIGHT = 600;
+const float SNAKE_SIZE = 0.05f;
+const float ITEM_SIZE = 0.02f;
+
+struct Segment {
+    glm::vec2 position;
+};
+
+std::vector<Segment> snake = {{glm::vec2(0.0f, 0.0f)}};
+glm::vec2 foodPos(rand() % 10 / 10.0f - 0.5f, rand() % 10 / 10.0f - 0.5f);
+float snakeAngle = 0.0f;
+
+void processInput(GLFWwindow *window) {
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, true);
+    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+        snakeAngle += 0.05f;
+    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+        snakeAngle -= 0.05f;
+}
+
+void updateSnake() {
+    glm::vec2 newHead = snake[0].position + glm::vec2(cos(snakeAngle) * 0.02f, sin(snakeAngle) * 0.02f);
+    snake.insert(snake.begin(), {newHead});
+    if (glm::distance(newHead, foodPos) < SNAKE_SIZE) {
+        foodPos = glm::vec2(rand() % 10 / 10.0f - 0.5f, rand() % 10 / 10.0f - 0.5f);
+    } else {
+        snake.pop_back();
+    }
+}
+
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+    glViewport(0, 0, width, height);
+}
+
+void drawQuad(glm::vec2 position, float size) {
+    glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(position, 0.0f));
+    model = glm::scale(model, glm::vec3(size, size, 1.0f));
+    glUniformMatrix4fv(glGetUniformLocation(1, "model"), 1, GL_FALSE, &model[0][0]);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+}
+
+int main() {
+    glfwInit();
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    GLFWwindow* window = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Cobrinha", NULL, NULL);
+    glfwMakeContextCurrent(window);
+    gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+    GLuint vao, vbo;
+    float vertices[] = {
+        -0.5f, -0.5f, 
+        0.5f, -0.5f, 
+        0.5f, 0.5f, 
+        -0.5f, 0.5f
+    };
+    glGenVertexArrays(1, &vao);
+    glGenBuffers(1, &vbo);
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    const char* vertexShaderSource = "#version 330 core\nlayout (location = 0) in vec2 aPos;\nuniform mat4 model;\nvoid main() {\ngl_Position = model * vec4(aPos, 0.0, 1.0);\n}";
+    const char* fragmentShaderSource = "#version 330 core\nout vec4 FragColor;\nvoid main() {\nFragColor = vec4(0.0, 1.0, 0.0, 1.0);\n}";
+    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
+    glCompileShader(vertexShader);
+    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
+    glCompileShader(fragmentShader);
+    GLuint shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glLinkProgram(shaderProgram);
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+    glUseProgram(shaderProgram);
+    
+    while (!glfwWindowShouldClose(window)) {
+        processInput(window);
+        updateSnake();
+        glClear(GL_COLOR_BUFFER_BIT);
+        glBindVertexArray(vao);
+        for (Segment& segment : snake) {
+            drawQuad(segment.position, SNAKE_SIZE);
+        }
+        drawQuad(foodPos, ITEM_SIZE);
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+    
+    glDeleteVertexArrays(1, &vao);
+    glDeleteBuffers(1, &vbo);
+    glfwTerminate();
+    return 0;
+}
